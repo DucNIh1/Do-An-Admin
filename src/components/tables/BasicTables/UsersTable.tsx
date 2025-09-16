@@ -1,10 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { FaTrash, FaUserSlash, FaUserCheck } from "react-icons/fa";
 import { MdRefresh } from "react-icons/md";
 import axiosConfig from "../../../axios/config";
 import UserAvatar from "../../common/UserAvatar";
 import ConfirmModal from "../../common/ConfirmModal";
+import { CiEdit } from "react-icons/ci";
+import Select from "react-select";
+import customStyles from "../../../utils/SelectCustomStyles";
+import { AuthContext } from "../../../context/AuthContext";
 
 type User = {
   id: string;
@@ -19,17 +23,31 @@ type User = {
 
 export default function UsersTable() {
   const queryClient = useQueryClient();
+  const { user: currentUser } = useContext(AuthContext);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const limit = 10;
+  const [selectedRole, setSelectedRole] = useState("");
+  const [selectedMajor, setSelectedMajor] = useState<{
+    value: string;
+    label: string;
+  } | null>(null);
+
+  const { data: majors } = useQuery({
+    queryKey: ["majors"],
+    queryFn: async () => {
+      const res = await axiosConfig.get("/api/majors");
+      return res.data.majors;
+    },
+  });
 
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
     user: User | null;
-    action: "deactivate" | "delete" | "activate" | null;
+    action: "deactivate" | "delete" | "activate" | "edit" | null;
   }>({
     isOpen: false,
     user: null,
@@ -43,6 +61,19 @@ export default function UsersTable() {
     }, 500);
     return () => clearTimeout(handler);
   }, [search]);
+
+  useEffect(() => {
+    if (modalState.action === "edit" && modalState.user) {
+      setSelectedRole(modalState.user.role);
+      setSelectedMajor(modalState.user.majorId || "");
+      if (modalState.user.major) {
+        const found = majors.find((m) => m.id === modalState.user.major.id);
+        setSelectedMajor(found ? { value: found.id, label: found.name } : null);
+      } else {
+        setSelectedMajor(null);
+      }
+    }
+  }, [modalState, majors]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["users", page, debouncedSearch, role, status],
@@ -61,12 +92,23 @@ export default function UsersTable() {
     keepPreviousData: true,
   });
 
-  const closeModal = () =>
-    setModalState({ isOpen: false, user: null, action: null });
-
   const softDeleteMutation = useMutation({
     mutationFn: (id: string) =>
       axiosConfig.patch(`/api/users/${id}/soft-delete`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      closeModal();
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: { role: string; majorId?: string };
+    }) => axiosConfig.patch(`/api/users/${id}/role`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       closeModal();
@@ -104,6 +146,8 @@ export default function UsersTable() {
     }
   };
 
+  const closeModal = () =>
+    setModalState({ isOpen: false, user: null, action: null });
   if (isLoading) return <div className="p-4">Đang tải...</div>;
   if (isError)
     return <div className="p-4 text-red-500">Lỗi khi tải dữ liệu</div>;
@@ -213,7 +257,11 @@ export default function UsersTable() {
             {users.map((u: User) => (
               <tr
                 key={u.id}
-                className="border-t border-gray-200 dark:border-gray-700"
+                className={`border-t border-gray-200 dark:border-gray-700 ${
+                  u.id === currentUser.id
+                    ? "bg-slate-200 cursor-not-allowed"
+                    : ""
+                }`}
               >
                 <td className="px-3 py-2">{u.name}</td>
                 <td className="px-3 py-2">
@@ -242,7 +290,10 @@ export default function UsersTable() {
                           action: "deactivate",
                         })
                       }
-                      className="p-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+                      disabled={u.id === currentUser.id}
+                      className={`p-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors ${
+                        u.id === currentUser.id ? "cursor-not-allowed" : ""
+                      }`}
                       title="Vô hiệu hóa"
                     >
                       <FaUserSlash />
@@ -256,17 +307,40 @@ export default function UsersTable() {
                           action: "activate",
                         })
                       }
-                      className="p-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                      disabled={u.id === currentUser.id}
+                      className={`p-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors ${
+                        u.id === currentUser.id ? "cursor-not-allowed" : ""
+                      } `}
                       title="Kích hoạt lại"
                     >
                       <FaUserCheck />
                     </button>
                   )}
+
                   <button
+                    disabled={u.id === currentUser.id}
+                    onClick={() =>
+                      setModalState({
+                        isOpen: true,
+                        user: u,
+                        action: "edit",
+                      })
+                    }
+                    className={`p-2 bg-[#083970] text-white rounded transition-colors ${
+                      u.id === currentUser.id ? "cursor-not-allowed" : ""
+                    }`}
+                    title="Cập nhật thông tin người dùng"
+                  >
+                    <CiEdit />
+                  </button>
+                  <button
+                    disabled={u.id === currentUser.id}
                     onClick={() =>
                       setModalState({ isOpen: true, user: u, action: "delete" })
                     }
-                    className="p-2 bg-[#be202e] text-white rounded hover:bg-red-700 transition-colors"
+                    className={`p-2 bg-[#be202e] text-white rounded hover:bg-red-700 transition-colors ${
+                      u.id === currentUser.id ? "cursor-not-allowed" : ""
+                    }`}
                     title="Xóa vĩnh viễn"
                   >
                     <FaTrash />
@@ -325,6 +399,64 @@ export default function UsersTable() {
           restoreUserMutation.isPending
         }
       />
+
+      {modalState.action === "edit" && modalState.user && (
+        <ConfirmModal
+          isOpen={modalState.isOpen}
+          onClose={closeModal}
+          onConfirm={() => {
+            if (selectedRole === "ADVISOR" && !selectedMajor) {
+              alert("Tư vấn viên bắt buộc phải có ngành!");
+              return;
+            }
+            updateUserMutation.mutate({
+              id: modalState.user.id,
+              data: {
+                role: selectedRole,
+                majorId:
+                  selectedRole === "ADVISOR" ? selectedMajor.value : undefined,
+              },
+            });
+          }}
+          title="Chỉnh sửa người dùng"
+          confirmText="Lưu"
+          variant="notice"
+          message={
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col">
+                <span className="mb-1 font-medium">Chọn role</span>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-700"
+                >
+                  <option value="ADMIN">Admin</option>
+                  <option value="STUDENT">Học sinh</option>
+                  <option value="ADVISOR">Tư vấn viên</option>
+                </select>
+              </label>
+
+              {selectedRole === "ADVISOR" && (
+                <label className="flex flex-col">
+                  <Select
+                    options={majors?.map((m) => ({
+                      value: m.id,
+                      label: m.name,
+                    }))}
+                    value={selectedMajor}
+                    onChange={(option) => setSelectedMajor(option)}
+                    placeholder="Chọn ngành..."
+                    isClearable
+                    className="text-black dark:text-white"
+                    styles={customStyles}
+                  />
+                </label>
+              )}
+            </div>
+          }
+          isConfirming={updateUserMutation.isPending}
+        />
+      )}
     </div>
   );
 }

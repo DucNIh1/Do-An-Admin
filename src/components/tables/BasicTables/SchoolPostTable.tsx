@@ -255,7 +255,6 @@ export default function SchoolPostsTable() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={deleteModalState.isOpen}
         onClose={closeDeleteModal}
@@ -274,13 +273,11 @@ export default function SchoolPostsTable() {
         confirmText="Xóa"
         isConfirming={deletePostMutation.isPending}
       />
-      {/* Edit Modal */}
       <EditPostModal
         isOpen={editModalState.isOpen}
         onClose={closeEditModal}
         post={editModalState.post}
       />
-      {/* Preview Modal */}
       <PostPreviewModal
         isOpen={previewModalState.isOpen}
         onClose={closePreviewModal}

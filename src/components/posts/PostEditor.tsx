@@ -7,17 +7,21 @@ import {
   uploadImagesAPI,
 } from "../../service/postService";
 import { toast } from "react-toastify";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import DropzoneComponent from "../form/form-elements/DropZone";
+import axiosConfig from "../../axios/config";
+import Select from "react-select";
+
 type FormValues = {
   title: string;
   teaser: string;
   content: string;
   isFeatured: boolean;
   thumbnail: File | null;
+  major?: { value: string; label: string } | null;
 };
 
 const schema = yup.object({
@@ -25,7 +29,7 @@ const schema = yup.object({
   teaser: yup
     .string()
     .required("Teaser không được để trống")
-    .max(250, "Teaser tối đa 250 ký tự"),
+    .max(350, "Teaser tối đa 350 ký tự"),
   content: yup.string().required("Nội dung không được để trống"),
   isFeatured: yup.boolean(),
   thumbnail: yup
@@ -157,6 +161,7 @@ const PostEditor = () => {
         content: data.content,
         isFeatured: data.isFeatured,
         isFromSchool: true,
+        majorId: data.major?.value || null,
       });
 
       const postId = createdPost?.data?.id;
@@ -195,6 +200,19 @@ const PostEditor = () => {
     },
     onError: (error: any) => {
       toast.error(error.message || "Có lỗi xảy ra, vui lòng thử lại!");
+    },
+  });
+
+  const { data: majorsData } = useQuery({
+    queryKey: ["majors"],
+    queryFn: async () => {
+      const res = await axiosConfig.get("/api/majors", {
+        params: { limit: 1000 },
+      });
+      return res.data.majors.map((m: any) => ({
+        value: m.id,
+        label: m.name,
+      }));
     },
   });
 
@@ -239,7 +257,6 @@ const PostEditor = () => {
         )}
       </div>
 
-      {/* Teaser */}
       <div className="mb-4">
         <textarea
           {...register("teaser")}
@@ -252,6 +269,25 @@ const PostEditor = () => {
         )}
       </div>
 
+      <div className="mb-4">
+        <label className="block text-gray-700 mb-2">
+          Ngành (không bắt buộc)
+        </label>
+        <Controller
+          name="major"
+          control={control}
+          render={({ field }) => (
+            <Select
+              {...field}
+              options={majorsData || []}
+              isClearable
+              placeholder="Chọn ngành..."
+              value={field.value || null}
+              onChange={(val) => field.onChange(val)}
+            />
+          )}
+        />
+      </div>
       {/* Thumbnail Upload sử dụng DropZone */}
       <div className="mb-4">
         <DropzoneComponent
@@ -265,7 +301,6 @@ const PostEditor = () => {
         )}
       </div>
 
-      {/* isFeatured Checkbox */}
       <div className="mb-4 flex items-center gap-2">
         <input
           type="checkbox"
@@ -278,7 +313,6 @@ const PostEditor = () => {
         </label>
       </div>
 
-      {/* ReactQuill */}
       <div className="mb-4">
         <label className="block text-gray-700 mb-2">Nội dung bài viết</label>
         <Controller
@@ -300,23 +334,17 @@ const PostEditor = () => {
         )}
       </div>
 
-      {/* Submit */}
-
-      {/* Preview */}
       <div className="mt-8 p-6 border border-gray-300 rounded-lg bg-white">
-        {/* Title preview */}
         {watchedTitle && (
           <h2 className="text-2xl font-bold text-gray-800 mb-3">
             {watchedTitle}
           </h2>
         )}
 
-        {/* Teaser preview */}
         {watchedTeaser && (
           <p className="text-gray-600 italic mb-4 text-lg">{watchedTeaser}</p>
         )}
 
-        {/* Content preview */}
         <div
           className="ql-editor border rounded-lg p-4 bg-white"
           dangerouslySetInnerHTML={
