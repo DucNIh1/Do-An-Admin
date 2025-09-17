@@ -26,10 +26,7 @@ type FormValues = {
 
 const schema = yup.object({
   title: yup.string().required("Tiêu đề không được để trống"),
-  teaser: yup
-    .string()
-    .required("Teaser không được để trống")
-    .max(350, "Teaser tối đa 350 ký tự"),
+  teaser: yup.string().required("Teaser không được để trống"),
   content: yup.string().required("Nội dung không được để trống"),
   isFeatured: yup.boolean(),
   thumbnail: yup
