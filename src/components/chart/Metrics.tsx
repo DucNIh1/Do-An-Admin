@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpIcon, BoxIconLine, GroupIcon } from "../../icons";
-import Badge from "../ui/badge/Badge";
+import { BoxIconLine, GroupIcon } from "../../icons";
 import axiosConfig from "../../axios/config";
 
 export default function EcommerceMetrics() {

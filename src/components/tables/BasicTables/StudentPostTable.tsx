@@ -8,6 +8,7 @@ import ConfirmModal from "../../common/ConfirmModal";
 import PostPreviewModal from "../../posts/PostPreviewModal";
 import { getPostsAPI } from "../../../service/postService";
 import Select from "react-select";
+import customStyles from "../../../utils/SelectCustomStyles";
 
 type Post = {
   id: string;
@@ -47,6 +48,11 @@ export default function StudentPostsTable() {
     post: Post | null;
   }>({ isOpen: false, post: null });
 
+  const [approveModalState, setApproveModalState] = useState<{
+    isOpen: boolean;
+    post: Post | null;
+  }>({ isOpen: false, post: null });
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(search);
@@ -77,7 +83,7 @@ export default function StudentPostsTable() {
         title: debouncedSearch,
         isFromSchool: false,
         majorId: selectedMajor?.value,
-        status: selectedStatus?.value, // lọc theo status
+        status: selectedStatus?.value,
       }),
     keepPreviousData: true,
   });
@@ -86,6 +92,8 @@ export default function StudentPostsTable() {
     setDeleteModalState({ isOpen: false, post: null });
   const closePreviewModal = () =>
     setPreviewModalState({ isOpen: false, post: null });
+  const closeApproveModal = () =>
+    setApproveModalState({ isOpen: false, post: null });
 
   const toggleStatusMutation = useMutation({
     mutationFn: (post: Post) =>
@@ -94,11 +102,17 @@ export default function StudentPostsTable() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      closeApproveModal();
     },
   });
 
   const handleToggleStatus = (post: Post) => {
-    toggleStatusMutation.mutate(post);
+    setApproveModalState({ isOpen: true, post });
+  };
+
+  const handleConfirmApprove = () => {
+    if (!approveModalState.post) return;
+    toggleStatusMutation.mutate(approveModalState.post);
   };
 
   const deletePostMutation = useMutation({
@@ -128,7 +142,6 @@ export default function StudentPostsTable() {
 
   const statusOptions: Status[] = [
     { value: "", label: "Tất cả" },
-
     { value: "pending", label: "Chờ duyệt" },
     { value: "verified", label: "Đã duyệt" },
   ];
@@ -159,11 +172,12 @@ export default function StudentPostsTable() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
-          className="px-3 py-2 border rounded w-full sm:w-1/3 dark:bg-gray-800 dark:border-gray-700"
+          className="px-3 py-2 border bg-white focus:outline-[#083970]  rounded w-full sm:w-1/3 dark:bg-gray-800 dark:border-gray-700"
         />
         <div className="w-full sm:w-1/3">
           <Select
             options={majorsData || []}
+            styles={customStyles}
             value={selectedMajor}
             onChange={(opt) => {
               setSelectedMajor(opt);
@@ -176,6 +190,7 @@ export default function StudentPostsTable() {
         <div className="w-full sm:w-1/3">
           <Select
             options={statusOptions}
+            styles={customStyles}
             value={selectedStatus}
             onChange={(opt) => {
               setSelectedStatus(opt);
@@ -304,7 +319,7 @@ export default function StudentPostsTable() {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Confirm Delete Modal */}
       <ConfirmModal
         isOpen={deleteModalState.isOpen}
         onClose={closeDeleteModal}
@@ -323,6 +338,32 @@ export default function StudentPostsTable() {
         confirmText="Xóa"
         isConfirming={deletePostMutation.isPending}
       />
+
+      {/* Confirm Approve / Unapprove Modal */}
+      <ConfirmModal
+        isOpen={approveModalState.isOpen}
+        onClose={closeApproveModal}
+        onConfirm={handleConfirmApprove}
+        variant="info"
+        title={
+          approveModalState.post?.status === "pending"
+            ? "Duyệt bài viết?"
+            : "Chuyển về chờ duyệt?"
+        }
+        message={
+          <span>
+            Bạn có chắc chắn muốn{" "}
+            {approveModalState.post?.status === "pending"
+              ? "duyệt"
+              : "chuyển về chờ duyệt"}{" "}
+            bài viết <strong>{approveModalState.post?.title}</strong>?
+          </span>
+        }
+        confirmText="Xác nhận"
+        isConfirming={toggleStatusMutation.isPending}
+      />
+
+      {/* Preview Modal */}
       <PostPreviewModal
         isOpen={previewModalState.isOpen}
         onClose={closePreviewModal}

@@ -5,6 +5,8 @@ import { MdRefresh } from "react-icons/md";
 import ConfirmModal from "../../common/ConfirmModal";
 import Select from "react-select";
 import useDebounce from "../../../hooks/useDebounce";
+import { FaTrash } from "react-icons/fa";
+
 type ConsultationRequest = {
   id: string;
   fullName: string;
@@ -22,17 +24,19 @@ const statusOptions = [
   { value: "DONE", label: "Hoàn thành" },
   { value: "REJECTED", label: "Từ chối" },
 ];
+
 export default function ConsultationRequestsTable() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const limit = 10;
 
   const [filterEmail, setFilterEmail] = useState("");
-  const [filterMajor, setFilterMajor] = useState("");
+  const [filterMajor, setFilterMajor] = useState<any>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [statusFilter, setStatusFilter] = useState("");
   const debouncedSearch = useDebounce(filterEmail, 500);
 
+  // modal trạng thái
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
     request: ConsultationRequest | null;
@@ -42,7 +46,16 @@ export default function ConsultationRequestsTable() {
     request: null,
     nextStatus: null,
   });
-  console.log(filterMajor);
+
+  // modal xoá
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    request: ConsultationRequest | null;
+  }>({
+    isOpen: false,
+    request: null,
+  });
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [
       "consultationRequests",
@@ -83,6 +96,15 @@ export default function ConsultationRequestsTable() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      axiosConfig.delete(`/api/consultation-requests/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consultationRequests"] });
+      setDeleteModal({ isOpen: false, request: null });
+    },
+  });
+
   const { data: majorsData } = useQuery({
     queryKey: ["majors"],
     queryFn: async () => {
@@ -95,6 +117,7 @@ export default function ConsultationRequestsTable() {
       }));
     },
   });
+
   const closeModal = () =>
     setModalState({ isOpen: false, request: null, nextStatus: null });
 
@@ -110,7 +133,7 @@ export default function ConsultationRequestsTable() {
   if (isError)
     return <div className="p-4 text-red-500">Lỗi khi tải dữ liệu</div>;
 
-  const { requests, currentPage, totalPage, majors } = data;
+  const { requests, currentPage, totalPage } = data;
 
   const statusLabels: Record<ConsultationRequest["status"], string> = {
     PENDING: "Chờ xử lý",
@@ -125,6 +148,7 @@ export default function ConsultationRequestsTable() {
     DONE: "bg-green-200 text-green-800",
     REJECTED: "bg-red-200 text-red-800",
   };
+
   const customStyles = {
     control: (provided: any) => ({
       ...provided,
@@ -146,6 +170,7 @@ export default function ConsultationRequestsTable() {
       height: "42px",
     }),
   };
+
   const modalContent = modalState.nextStatus
     ? {
         variant: "notice" as const,
@@ -158,6 +183,20 @@ export default function ConsultationRequestsTable() {
           </span>
         ),
         confirmText: "Xác nhận",
+      }
+    : null;
+
+  const deleteModalContent = deleteModal.request
+    ? {
+        variant: "danger" as const,
+        title: "Xoá yêu cầu?",
+        message: (
+          <span>
+            Bạn có chắc chắn muốn xoá yêu cầu tư vấn của{" "}
+            <strong>{deleteModal.request.fullName}</strong>?
+          </span>
+        ),
+        confirmText: "Xoá",
       }
     : null;
 
@@ -206,7 +245,6 @@ export default function ConsultationRequestsTable() {
           />
         </div>
 
-        {/* Sort */}
         <select
           value={sortOrder}
           onChange={(e) => {
@@ -235,27 +273,18 @@ export default function ConsultationRequestsTable() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-200 dark:border-gray-700 rounded">
           <thead className="bg-gray-100 dark:bg-gray-800">
             <tr>
-              <th className="px-3 py-2 text-left font-semibold min-w-[120px]">
-                Tên
-              </th>
+              <th className="px-3 py-2 text-left font-semibold">Tên</th>
               <th className="px-3 py-2 text-left font-semibold">Email</th>
-              <th className="px-3 py-2 text-left font-semibold">
-                Số điện thoại
-              </th>
-              <th className="px-3 py-2 text-left font-semibold min-w-[200px]">
-                Ngành
-              </th>
-              <th className="px-3 py-2 text-center font-semibold min-w-[100px]">
+              <th className="px-3 py-2 text-left font-semibold">SĐT</th>
+              <th className="px-3 py-2 text-left font-semibold">Ngành</th>
+              <th className="px-3 py-2 text-center font-semibold">
                 Trạng thái
               </th>
-              <th className="px-3 py-2 text-center font-semibold min-w-[200px]">
-                Ngày tạo
-              </th>
+              <th className="px-3 py-2 text-center font-semibold">Ngày tạo</th>
               <th className="px-3 py-2 text-center font-semibold">Hành động</th>
             </tr>
           </thead>
@@ -281,7 +310,7 @@ export default function ConsultationRequestsTable() {
                 <td className="px-3 py-2 text-center">
                   {new Date(r.createdAt).toLocaleString("vi-VN")}
                 </td>
-                <td className="px-3 py-2 text-center">
+                <td className="px-3 py-2 text-center flex gap-2 justify-center">
                   <select
                     value=""
                     onChange={(e) =>
@@ -301,6 +330,13 @@ export default function ConsultationRequestsTable() {
                       </option>
                     ))}
                   </select>
+                  <button
+                    onClick={() => setDeleteModal({ isOpen: true, request: r })}
+                    className="p-2 bg-[#be202e] hover:bg-red-700 text-white rounded"
+                    title="Xóa vĩnh viễn"
+                  >
+                    <FaTrash />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -332,6 +368,7 @@ export default function ConsultationRequestsTable() {
         </div>
       )}
 
+      {/* Modal đổi trạng thái */}
       {modalContent && (
         <ConfirmModal
           isOpen={modalState.isOpen}
@@ -342,6 +379,21 @@ export default function ConsultationRequestsTable() {
           message={modalContent.message}
           confirmText={modalContent.confirmText}
           isConfirming={updateStatusMutation.isPending}
+        />
+      )}
+
+      {deleteModalContent && (
+        <ConfirmModal
+          isOpen={deleteModal.isOpen}
+          onClose={() => setDeleteModal({ isOpen: false, request: null })}
+          onConfirm={() =>
+            deleteMutation.mutate(deleteModal.request?.id as string)
+          }
+          variant={"warning"}
+          title={deleteModalContent.title}
+          message={deleteModalContent.message}
+          confirmText={deleteModalContent.confirmText}
+          isConfirming={deleteMutation.isPending}
         />
       )}
     </div>
